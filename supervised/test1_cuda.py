@@ -42,9 +42,9 @@ HID = 4  # ile neuronów w warstwie ukrytej
 N_SUCCESS = 100  # liczba próbek treningowych zwracających "1"
 N_FAILURE = 400  # liczba próbej treningowych zwracających "0"
 
-BATCH_SIZE = 40  # liczba próbek pokazywanych jednocześnie (zanim nastąpi krok modyfikacji parametrów sieci)
+BATCH_SIZE = 20  # liczba próbek pokazywanych jednocześnie (zanim nastąpi krok modyfikacji parametrów sieci)
 
-EPOCHS = 2000
+EPOCHS = 4000
 LR = 0.0001
 
 # Net creation

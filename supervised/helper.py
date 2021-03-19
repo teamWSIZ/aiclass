@@ -29,6 +29,19 @@ def generate_2x1_anywhere(sz, n_success, n_failure, batch_size):
     return batches_in, batches_ou
 
 
+
+"""
+Wejście do sieci:
+[0,0,0,1,1,1]   o długości "len"
+wyjście:
+1 jeśli występują tylko 2 jedynki i są oddalone o 2, czyli np. 
+[0,0,0,1,1,1] --> 0
+[0,1,0,1,0,0] --> 1
+[1,0,1,0,0,0] --> 1
+[1,0,1,0,0,1] --> 0
+
+"""
+
 def generate_2x1_dist2(len, count, need_1, batch_size, gpu=False):
     in_ = []
     ou_ = []
@@ -55,7 +68,7 @@ def generate_2x1_dist2(len, count, need_1, batch_size, gpu=False):
 
 
 def dist(list, elem):
-    # Znajduje odległość między pierwszym i ostatnim wystąpieniem "elem" w liście
+    # Znajduje odległość między pierwszym i ostatnim wystąpieniem "elem" w liście [0,0,1,0,0,0,1] --> 4
     n = len(list)
     l = n
     r = 0

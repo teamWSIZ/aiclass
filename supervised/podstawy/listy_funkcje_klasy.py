@@ -17,5 +17,34 @@ print(z[0])  # [[0, 1], [3, 4], [6, 7]]
 print(z[0][2])  # [6,7]
 print(z[0][2][0])  # 6
 
+t = [[[[1]]]]  # tablica 4d ... [nr_obrazka][kolor][rząd][kolumna]
 
 
+def add(a: float, b: float) -> float:
+    # przykład funkcji
+    return a + b
+
+
+x = 'abc'
+print(type(x))
+
+print(add(2, 8))
+
+
+class Car:
+    fuel = 10
+    name = 'Xiao'
+
+    def __init__(self, fuel, name):
+        self.fuel = fuel
+        self.name = name
+
+    def fill_up(self, final_fuel):
+        self.fuel = final_fuel
+
+    def drive(self, km):
+        self.fuel -= 5 * km
+
+
+mycar = Car(30, 'Zhong')
+mycar.fill_up(final_fuel=50)
