@@ -34,17 +34,17 @@ class MyNet(nn.Module):
 
 
 dtype = torch.double
-device = 'cpu'  #gdzie wykonywać obliczenia
-# device = 'cuda'
-N = 100  # ile liczb wchodzi (długość listy)
-HID = 2  # ile neuronów w warstwie ukrytej
-N_POSITIVE = 10  # liczba próbek treningowych zwracających "1"
-N_FAILURE = 1000  # liczba próbej treningowych zwracających "0"
+# device = 'cpu'  # gdzie wykonywać obliczenia
+device = 'cuda'
+N = 150  # ile liczb wchodzi (długość listy)
+HID = 3  # ile neuronów w warstwie ukrytej
+N_POSITIVE = 50  # liczba próbek treningowych zwracających "1"
+N_RANDOM = 5000  # liczba próbej treningowych zwracających "0"
 
-BATCH_SIZE = 500  # liczba próbek pokazywanych jednocześnie (zanim nastąpi krok modyfikacji parametrów sieci)
+BATCH_SIZE = 500  # liczba próbek losowych
 
 EPOCHS = 5000
-LR = 0.001
+LR = 0.01
 
 # Net creation
 net = MyNet(N, HID)
@@ -58,7 +58,7 @@ if device == 'cuda':
 # Próbki napewno dodatnie
 sample1, output1 = gen_all_samples_1_distance_given(N, 2)
 # Próbki losowe
-sample_r, output_r = gen_random_trainset_1twice_distance_given(N, N_FAILURE, 2)
+sample_r, output_r = gen_random_trainset_1twice_distance_given(N, N_RANDOM, 2)
 
 # jednolita lista sampli, próbki dodatnie NPOSITIVE razy
 sample = []
@@ -82,7 +82,6 @@ t_output = t_output[per_torch]
 # "krojenie" próbek na "batches" (grupy próbek, krok optymalizacji po przeliczeniu całej grupy)
 b_sample = torch.split(t_sample, BATCH_SIZE)
 b_output = torch.split(t_output, BATCH_SIZE)
-
 
 # Training setup
 loss_function = nn.MSELoss(reduction='mean')
