@@ -5,8 +5,6 @@ import torch.nn.functional as funct
 # https://pytorch.org/tutorials/beginner/saving_loading_models.html
 from supervised.helper import *
 
-gpu = False
-
 
 class MyNet(nn.Module):
     """
@@ -35,49 +33,77 @@ class MyNet(nn.Module):
         torch.save(self.state_dict(), filename)
 
 
-typ = torch.float
+dtype = torch.double
+device = 'cpu'  #gdzie wykonywać obliczenia
+# device = 'cuda'
+N = 100  # ile liczb wchodzi (długość listy)
+HID = 2  # ile neuronów w warstwie ukrytej
+N_POSITIVE = 10  # liczba próbek treningowych zwracających "1"
+N_FAILURE = 1000  # liczba próbej treningowych zwracających "0"
 
-N = 6  # ile liczb wchodzi (długość listy)
-HID = 4  # ile neuronów w warstwie ukrytej
-N_SUCCESS = 100  # liczba próbek treningowych zwracających "1"
-N_FAILURE = 400  # liczba próbej treningowych zwracających "0"
+BATCH_SIZE = 500  # liczba próbek pokazywanych jednocześnie (zanim nastąpi krok modyfikacji parametrów sieci)
 
-BATCH_SIZE = 20  # liczba próbek pokazywanych jednocześnie (zanim nastąpi krok modyfikacji parametrów sieci)
-
-EPOCHS = 4000
-LR = 0.0001
+EPOCHS = 5000
+LR = 0.001
 
 # Net creation
 net = MyNet(N, HID)
-net.load('saves/one.dat')
+net = net.double()
+# net.load('saves/one.dat')
 
-if gpu:
+# Czy obliczenia mają być na GPU
+if device == 'cuda':
     net = net.cuda()  # cała sieć kopiowana na GPU
+
+# Próbki napewno dodatnie
+sample1, output1 = gen_all_samples_1_distance_given(N, 2)
+# Próbki losowe
+sample_r, output_r = gen_random_trainset_1twice_distance_given(N, N_FAILURE, 2)
+
+# jednolita lista sampli, próbki dodatnie NPOSITIVE razy
+sample = []
+output = []
+for _ in range(N_POSITIVE):
+    sample.extend(sample1)
+    output.extend(output1)
+sample.extend(sample_r)
+output.extend(output_r)
+
+# zamiana próbek na tensory (możliwa kopia do pamięci GPU)
+t_sample = tensor(sample, dtype=dtype, device=device)
+t_output = tensor(output, dtype=dtype, device=device)
+
+# przetasowanie całośći
+sample_count = t_sample.size()[0]
+per_torch = torch.randperm(sample_count)
+t_sample = t_sample[per_torch]
+t_output = t_output[per_torch]
+
+# "krojenie" próbek na "batches" (grupy próbek, krok optymalizacji po przeliczeniu całej grupy)
+b_sample = torch.split(t_sample, BATCH_SIZE)
+b_output = torch.split(t_output, BATCH_SIZE)
+
 
 # Training setup
 loss_function = nn.MSELoss(reduction='mean')
 optimizer = optim.SGD(net.parameters(), lr=LR, momentum=0.9)  # będzie na GPU, jeśli gpu=True
 
-# Training data (tensory na GPU, jeśli gpu=True)
-batches_in, batches_ou = generate_2x1_dist2(N, count=N_SUCCESS + N_FAILURE, need_1=N_SUCCESS,
-                                            batch_size=BATCH_SIZE, gpu=gpu)
-
 # Training
 for epoch in range(EPOCHS):
     total_loss = 0
-    for (batch_in, batch_out) in zip(batches_in, batches_ou):
+    for (batch_s, batch_o) in zip(b_sample, b_output):
         optimizer.zero_grad()
         # print(batch_in)
-        prediction = net(batch_in)
+        prediction = net(batch_s)
         prediction = prediction.view(-1)  # size: [5,1] -> [5] (flat, same as b_out)
-        loss = loss_function(prediction, batch_out)
+        loss = loss_function(prediction, batch_o)
 
         if EPOCHS - epoch < 30:
             # pokazujemy wyniki dla 30 ostatnich przypadków, by sprawdzić co sieć przewiduje tak naprawdę
             print('---------')
-            print(f'input: {batch_in.tolist()}')
+            print(f'input: {batch_s.tolist()}')
             print(f'pred:{format_list(prediction.tolist())}')
-            print(f'outp:{format_list(batch_out.tolist())}')
+            print(f'outp:{format_list(batch_o.tolist())}')
 
         total_loss += loss
 
@@ -88,3 +114,4 @@ for epoch in range(EPOCHS):
 
 # Optional result save
 net.save('saves/one.dat')
+print('net saved')
