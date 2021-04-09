@@ -20,4 +20,13 @@ c = tensor([6])
 abc = T.cat((a, b, c), 0)
 print(abc)  # tensor([0, 1, 2, 3, 4, 5, 6])
 
+print(a * b)  # [ 0,  4, 10]
+
+a1 = a.view(1, 1, -1)
+b1 = b.view(1, 1, -1)
+print(a1 * b1)  # [[[ 0,  4, 10]]]
+print(a / 2)  # [0.0000, 0.5000, 1.0000]
+print((a + b) / 2)  # [1.5000, 2.5000, 3.5000]
+print((a1 + b1) / 2)  # [[[1.5000, 2.5000, 3.5000]]]
+
 # zmiana szeregowania

@@ -15,13 +15,19 @@ class MyNet(nn.Module):
         super().__init__()
         self.hid = hid
         self.sz = sz
-        self.flat1 = nn.Linear(sz, hid, True)
-        self.flat2 = nn.Linear(hid, 1, True)
+        self.conv1 = nn.Conv1d(in_channels=1, out_channels=2, kernel_size=5, stride=1, padding=2)
+        self.flat1 = nn.Linear(in_features=sz * 2, out_features=hid, bias=True)
+        self.flat2 = nn.Linear(in_features=hid, out_features=1, bias=True)
 
     def forward(self, x):
         """ Main function for evaluation of input """
-        x = x.view(-1, self.sz)
-        print(x.size())
+        x = x.view(-1, 1, self.sz)  # wchodzi cały batch; czyli [batch][1 channel][SZ]
+        # print(x.size())
+        x = self.conv1(x)
+        x = funct.relu(x)
+        # print(x.size())
+        x = x.view(-1, 2 * self.sz)
+        # print(x.size())
         x = self.flat1(x)
         x = self.flat2(funct.relu(x))
         return funct.relu(x)
@@ -39,14 +45,14 @@ dtype = torch.double
 device = 'cpu'
 N = 30  # ile liczb wchodzi (długość listy)
 HID = 1  # ile neuronów w warstwie ukrytej
-N_POSITIVE = 5
+N_POSITIVE = 10
 # liczba próbek treningowych zwracających "1"
-N_RANDOM = 50  # liczba próbej treningowych zwracających "0"
+N_RANDOM = 200  # liczba próbej treningowych zwracających "0"
 
 BATCH_SIZE = 50  # liczba próbek losowych
 
 EPOCHS = 1000
-LR = 0.01
+LR = 0.001
 
 # Net creation
 net = MyNet(N, HID)

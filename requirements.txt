@@ -1,3 +1,5 @@
 apyori
 torch
+torchvision
 numpy
+Pillow
