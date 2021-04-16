@@ -6,7 +6,7 @@ type = T.double
 
 
 def randperm(n):
-    # losowa parmutacjia liczb od [0,n) ; można też użyć T.randperm(n)
+    # losowa parmutacja liczb od [0,n) ; można też użyć T.randperm(n)
     p = [i for i in range(n)]
     shuffle(p)
     return p

@@ -56,16 +56,17 @@ transform = TS.Compose(
      TS.RandomAffine(degrees=2, fillcolor=(0, 0, 0), translate=(0.05, 0)),
      TS.GaussianBlur(kernel_size=3),
      TS.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
-     SuperposeSign(),
+     # SuperposeSign(),
      # TS.RandomAffine(degrees=30, fillcolor=(0, 0, 0), translate=(0.1, 0.1)),
      TS.ToTensor()])
 
-dataset = datasets.ImageFolder('raw', transform=transform)
-dataloader = DataLoader(dataset, batch_size=5, shuffle=True)
+dataset = datasets.ImageFolder('small', transform=transform)
+dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
 
-for i in range(3):
+for i in range(2):
     for (images, classes) in dataloader:
-        # print('%', images.size())  # [3, 3, 128, 128]
+        #classes -- narazie same zera, tensor([0, 0, 0, 0])
+        print(images.size(), type(images), classes)  #torch.Size([4, 3, 256, 256]) <class 'torch.Tensor'>
         for i in images:
             TF.to_pil_image(i).show()
         # print(classes)  # [0, 0, 0]

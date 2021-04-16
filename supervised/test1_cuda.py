@@ -21,8 +21,9 @@ class MyNet(nn.Module):
     def forward(self, x):
         """ Main function for evaluation of input """
         x = x.view(-1, self.sz)
-        print(x.size())
+        print(x.size())  # batchsize x self.sz
         x = self.flat1(x)
+        print(x.size()) # batchsize x self.hid
         x = self.flat2(funct.relu(x))
         return funct.relu(x)
 
@@ -38,7 +39,7 @@ dtype = torch.double
 # device = 'cpu'  # gdzie wykonywać obliczenia
 device = 'cpu'
 N = 30  # ile liczb wchodzi (długość listy)
-HID = 1  # ile neuronów w warstwie ukrytej
+HID = 2  # ile neuronów w warstwie ukrytej
 N_POSITIVE = 5
 # liczba próbek treningowych zwracających "1"
 N_RANDOM = 50  # liczba próbej treningowych zwracających "0"
