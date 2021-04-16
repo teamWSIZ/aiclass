@@ -38,7 +38,7 @@ class MyNet(nn.Module):
         return funct.relu(x)
 
     def load(self, filename):
-        self.load_state_dict(torch.load(filename))
+        self.load_state_dict(torch.load(filename, map_location=device))
         self.eval()
 
     def save(self, filename):
@@ -46,8 +46,8 @@ class MyNet(nn.Module):
 
 
 dtype = torch.float
-# device = 'cpu'  # gdzie wykonywać obliczenia
-device = 'cuda'
+device = 'cpu'  # gdzie wykonywać obliczenia
+# device = 'cuda'
 
 # Parametry sieci
 RES = 256  # ile liczb wchodzi (długość listy)
@@ -65,7 +65,7 @@ BATCH_SIZE = 60
 LR = 0.001
 
 # Wczytywanie poprzednio-zapisanej sieci
-net.load('saves/one.dat')
+net.load('saves\\one.dat')
 
 
 if device == 'cuda':
@@ -91,6 +91,7 @@ output0 = tensor([0, 0] * n0, dtype=dtype, device=device)
 # przerzucenie danych na GPU (NVIDIA) jeśli chcemy...
 if device == 'cuda':
     sample1 = sample1.cuda()
+    sample2 = sample2.cuda()
     sample0 = sample0.cuda()
 
 # input('rozpocząć proces uczenia? ')
@@ -158,5 +159,5 @@ for epoch in range(EPOCHS):
         print(f' epoch:{epoch}, loss:{total_loss:.6f}', f'correct:{correct}/{total}\t wrong:{wrong}/{total}')
 
 # Optional result save
-net.save('saves/one.dat')
+net.save('saves\\one.dat')
 print('net saved')
