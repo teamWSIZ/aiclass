@@ -7,8 +7,12 @@ dev = T.device('cpu')
 
 data = [[0, 1], [5, 2], [0, 3], [0, 4], [0, 5], [0, 6]]
 z = tensor(data, dtype=dtype)
-
 print(z.size())
+
+x = z.view(-1, 2, 3)
+print(x)
+print(x.size())
+
 
 # print(T.max_pool1d(z, 2).tolist())  # [[1.0], [5.0], [3.0], [4.0], [5.0], [6.0]]
 # print(T.sum(z).tolist())  # 26.0

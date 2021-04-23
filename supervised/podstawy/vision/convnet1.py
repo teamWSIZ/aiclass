@@ -12,18 +12,26 @@ class MyNet(nn.Module):
         Simple NN: input(sz) ---> flat(hid) ---> 1
     """
 
-    def __init__(self, res, hid):
+    def __init__(self, res, hid, noutput):
         super().__init__()
         self.hid = hid
         self.res = res  # 3 channels, 256 x 256 resolution
+        self.nsigns = noutput
 
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=5, padding=2)  # pozostawia RES x RES
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, padding=1)  # pozostawia RES x RES
         self.pool1 = nn.MaxPool2d(kernel_size=4, stride=4)  # RES → RES/4 (256 → 64)
+        #
+        # 0 1 1 0
+        # 0 1 1 0
+        # 0 2 1 0
+        # 0 1 1 0
+        #
+        # -> 0 1 1 0 0 1 1 0 0 2 1 0 0 1 1 0
 
         self.flat_input_size = 3 * (res // 4) ** 2
 
         self.flat1 = nn.Linear(self.flat_input_size, hid, bias=True)
-        self.flat2 = nn.Linear(hid, 2, bias=True)  # 2: wyjscie ~ [0,0] lub [1,0] lub [0,1] → poszukiwanie dwóch wzorców
+        self.flat2 = nn.Linear(hid, self.nsigns, bias=True)  # 2: wyjscie. → poszukiwanie nsigns wzorców
 
     def forward(self, x):
         """ Main function for evaluation of input """
@@ -46,118 +54,134 @@ class MyNet(nn.Module):
 
 
 dtype = torch.float
-device = 'cpu'  # gdzie wykonywać obliczenia
-# device = 'cuda'
+# device = 'cpu'  # gdzie wykonywać obliczenia
+device = 'cuda'
 
 # Parametry sieci
 RES = 256  # ile liczb wchodzi (długość listy)
-HID = 6  # ile neuronów w warstwie ukrytej
-# Net creation
-net = MyNet(res=RES, hid=HID)
+HID = 8  # ile neuronów w warstwie ukrytej
+
+# Setup próbek zawierające znaki (SIGNS) które mają być wykrywane i klasyfikowane przez sieć
+N_POSITIVE = [200, 200, 200, 600]
+SIGNS = ['sign.png', 'm.png', 'kali128.png', None]
+nsigns = len(SIGNS)
+
+# Tworzenie sieci neuronowejy
+net = MyNet(res=RES, hid=HID, noutput=nsigns)
 net = net.float()
 
-# Parametry training-set-u
-N_POSITIVE_TYPE1 = 60
-N_POSITIVE_TYPE2 = 60
-N_NEGATIVE = 120  # liczba próbej treningowych zwracających "0"
-EPOCHS = 200
-BATCH_SIZE = 60
-LR = 0.001
+# N_NEGATIVE = 120  # liczba próbek treningowych zwracających "0"
+EPOCHS = 10000
+BATCH_SIZE = 90
+LR = 0.001  # learning rate
 
 # Wczytywanie poprzednio-zapisanej sieci
-net.load('saves\\one.dat')
-
+# net.load('saves\\one.dat')    # wersja windows
+net.load('saves/one.dat')
 
 if device == 'cuda':
     net = net.cuda()  # cała sieć kopiowana na GPU
 
-# Próbki "dodatnie" (zawierające szukany element)
-sample1 = generate_sample(N_POSITIVE_TYPE1, 'sign.png')  # tensor
-n1 = sample1.size()[0]
-output1 = tensor([1, 0] * n1, dtype=dtype, device=device)
+# ########################################
+# Przygotowanie danych do uczenia sieci
 
-# Próbki "dodatnie" (zawierające szukany element typu 2)
-sample2 = generate_sample(N_POSITIVE_TYPE2, 'm.png')  # tensor
-n2 = sample2.size()[0]
-output2 = tensor([0, 1] * n2, dtype=dtype, device=device)
+# Obrazy zawierające próbki (SIGNS) na pozycjach początkowych + ostatni element tylko z tłami
+ssample = []
+for sign, count in zip(SIGNS, N_POSITIVE):
+    ssample.append(generate_sample(count, sign))  # krok generowania danych do uczenia sieci
 
+sample_sizes = [s.size()[0] for s in ssample]
+sample_count = sum(sample_sizes)
+print(sample_count)
 
+# Ustalenie outputu -- dla "SIGNS" ustawiamy kolejne jedynki
+# nsigns=3 → [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+w = [[0] * i + [1] + [0] * (nsigns - i - 1) for i in range(nsigns)]  # meh... taki oneliner...
 
-# Próbki losowe
-sample0 = generate_sample(N_NEGATIVE, None)
-n0 = sample0.size()[0]
-output0 = tensor([0, 0] * n0, dtype=dtype, device=device)
+soutput = [tensor(w[i] * sample_sizes[i], dtype=dtype, device=device) for i in range(nsigns)]
 
 # przerzucenie danych na GPU (NVIDIA) jeśli chcemy...
 if device == 'cuda':
-    sample1 = sample1.cuda()
-    sample2 = sample2.cuda()
-    sample0 = sample0.cuda()
+    for i in range(nsigns):
+        ssample[i] = ssample[i].cuda()
 
-# input('rozpocząć proces uczenia? ')
+# jednolita lista sampli (wszystkie w jednym tensorze)
+sample = torch.cat(ssample, 0)
+output = torch.cat(soutput, 0)
 
-# jednolita lista sampli, próbki dodatnie NPOSITIVE razy
-sample = torch.cat((sample0, sample1), 0)
-output = torch.cat((output0, output1), 0)
-output = output.view(-1, 2)
+output = output.view(-1, nsigns)
 
 print('sample: ', sample.size())
 print('output: ', output.size())
 
-# przetasowanie całośći
-sample_count = n0 + n1
-per_torch = torch.randperm(sample_count)
-t_sample = sample[per_torch]
-t_output = output[per_torch]  # todo: to można powtarzać co kilka epok
 
+# funkcja "tasujaca" karty-próbki stosowane do uczenia sieci
+def shuffle_samples_and_outputs(sample_count, sample, output):
+    per_torch = torch.randperm(sample_count)
+    shuffled_sample = sample[per_torch]
+    shuffled_output = output[per_torch]
+    return shuffled_sample, shuffled_output
+
+
+t_sample, t_output = shuffle_samples_and_outputs(sample_count, sample, output)
 # "krojenie" próbek na "batches" (grupy próbek, krok optymalizacji po przeliczeniu całej grupy)
 b_sample = torch.split(t_sample, BATCH_SIZE)
 b_output = torch.split(t_output, BATCH_SIZE)
 
-# Training setup
+# ########################################
+# Proces uczenia sieci
 loss_function = nn.MSELoss(reduction='mean')
 optimizer = optim.SGD(net.parameters(), lr=LR, momentum=0.9)  # będzie na GPU, jeśli gpu=True
 
-# Training
-for epoch in range(EPOCHS):
+epoch = 0
+while epoch < EPOCHS:
+    epoch += 1
     total_loss = 0
     correct = 0
     wrong = 0
     total = 0
+
     for (batch_s, batch_o) in zip(b_sample, b_output):
+        # pętla po "batch-ach", czyli grupach próbek
         optimizer.zero_grad()
-        # print(batch_in)
         prediction = net(batch_s)
-        prediction = prediction.view(-1)  # size: [5,1] -> [5] (flat, takie samo jak batch_out)
+        prediction = prediction.view(-1)
         batch_o = batch_o.view(-1)
-        # print(f'prediction: {prediction.size()}, output:{batch_o.size()}')  # sprawdzenie wymiarów: muszą być te same
         loss = loss_function(prediction, batch_o)
 
         n = prediction.size()[0]
         for i in range(n):
             pred = prediction[i]
             corr = batch_o[i]
-            total_error = abs(pred- corr)
+            total_error = abs(pred - corr)
             if total_error < 0.05:
                 correct += 1
             if total_error > 0.40:
                 wrong += 1
             total += 1
 
-        if EPOCHS - epoch < 30 and False:
-            # pokazujemy wyniki dla 30 ostatnich przypadków, by sprawdzić co sieć przewiduje tak naprawdę
-            print('---------')
-            print(f'input: {batch_s.tolist()}')
-            print(f'pred:{format_list(prediction.tolist())}')
-            print(f'outp:{format_list(batch_o.tolist())}')
-
         total_loss += loss
 
-        loss.backward()
-        optimizer.step()
+        loss.backward()  # sprawdzenie które zmienne sieci wpływają najbardziej na wynik/błąd
+        optimizer.step()  # "lekka" modyfikacja zmiennych sieci
+
+    # Kod "periodycznych" raportów i modyfikacji układu próbek i procesu uczenia sieci
+
     if epoch % 10 == 0:
         print(f' epoch:{epoch}, loss:{total_loss:.6f}', f'correct:{correct}/{total}\t wrong:{wrong}/{total}')
 
+    if epoch % 100 == 0:
+        print('shuffle!')
+        t_sample, t_output = shuffle_samples_and_outputs(sample_count, sample, output)
+        b_sample = torch.split(t_sample, BATCH_SIZE)
+        b_output = torch.split(t_output, BATCH_SIZE)
+
+    if epoch == EPOCHS - 1:
+        s = input('dodać 100 epok? (y/n)')
+        if s == 'y':
+            EPOCHS += 100
+
 # Optional result save
-net.save('saves\\one.dat')
+# net.save('saves\\one.dat')    # wersja windows
+net.save('saves/one.dat')
 print('net saved')

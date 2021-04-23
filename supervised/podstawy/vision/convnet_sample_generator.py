@@ -9,7 +9,8 @@ from torchvision import datasets, transforms as TS
 
 class SuperposeSign(object):
     """
-    Superpose sign on an image.
+    Klasa którą można użyć jako "Transformację" (jak: torchvision.transforms) w kompozycji transformacji
+    obrazów.
     """
     sign: Image
     mask: Image
@@ -58,7 +59,8 @@ transform_positive = TS.Compose(
 
 def generate_transform(resolution=256, sign_filename=None):
     """
-    Wykonuje transformacje przygotowujące/randomizujące próbki.
+    Tworzy zestaw transformacji przygotowujących/randomizujących próbki.
+    Jeśli `sign_filename` jest podane, to ten obrazek będzie nakładany na tło poprzednich.
     :return:
     """
     # podstawowe transformacje
@@ -80,19 +82,22 @@ def generate_sample(img_count, sign_filename=None):
     Uwaga: liczba obrazków zawsze jest wielokrotnością liczby obrazków w folderze z których są pobierane.
     """
     t = generate_transform(resolution=256, sign_filename=sign_filename)
-    dataset = datasets.ImageFolder('raw', transform=t)
+    dataset = datasets.ImageFolder('small', transform=t)
     dataloader = DataLoader(dataset, batch_size=15, shuffle=True)  # adjust to number of pictures
     res = None
     while res is None or res.size()[0] < img_count:
         for (images, classes) in dataloader:
-            # for i in images:
-            #     TF.to_pil_image(i).show()
+            for i in images:
+                TF.to_pil_image(i).show()
             if res is None:
                 res = images
             else:
                 res = torch.cat((res, images), 0)
-    print('generated:', res.size())
+    if sign_filename is not None:
+        print(f'generated for [{sign_filename:10}]:', res.size())
+    else:
+        print(f'generated backgrounds:', res.size())
     return res
 
 
-# generate_sample(3, 'sign.png')
+generate_sample(3, 'sign.png')
