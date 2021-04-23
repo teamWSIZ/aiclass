@@ -82,13 +82,13 @@ def generate_sample(img_count, sign_filename=None):
     Uwaga: liczba obrazków zawsze jest wielokrotnością liczby obrazków w folderze z których są pobierane.
     """
     t = generate_transform(resolution=256, sign_filename=sign_filename)
-    dataset = datasets.ImageFolder('small', transform=t)
+    dataset = datasets.ImageFolder('raw', transform=t)
     dataloader = DataLoader(dataset, batch_size=15, shuffle=True)  # adjust to number of pictures
     res = None
     while res is None or res.size()[0] < img_count:
         for (images, classes) in dataloader:
-            for i in images:
-                TF.to_pil_image(i).show()
+            # for i in images:
+            #     TF.to_pil_image(i).show()
             if res is None:
                 res = images
             else:
@@ -100,4 +100,4 @@ def generate_sample(img_count, sign_filename=None):
     return res
 
 
-generate_sample(3, 'sign.png')
+# generate_sample(3, 'sign.png')

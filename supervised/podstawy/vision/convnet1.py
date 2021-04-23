@@ -62,7 +62,7 @@ RES = 256  # ile liczb wchodzi (długość listy)
 HID = 8  # ile neuronów w warstwie ukrytej
 
 # Setup próbek zawierające znaki (SIGNS) które mają być wykrywane i klasyfikowane przez sieć
-N_POSITIVE = [200, 200, 200, 600]
+N_POSITIVE = [30, 30, 30, 90]
 SIGNS = ['sign.png', 'm.png', 'kali128.png', None]
 nsigns = len(SIGNS)
 
@@ -71,8 +71,8 @@ net = MyNet(res=RES, hid=HID, noutput=nsigns)
 net = net.float()
 
 # N_NEGATIVE = 120  # liczba próbek treningowych zwracających "0"
-EPOCHS = 10000
-BATCH_SIZE = 90
+EPOCHS = 200
+BATCH_SIZE = 60
 LR = 0.001  # learning rate
 
 # Wczytywanie poprzednio-zapisanej sieci
