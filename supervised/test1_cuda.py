@@ -52,7 +52,7 @@ LR = 0.01
 # Net creation
 net = MyNet(N, HID)
 net = net.double()
-# net.load('saves/one.dat')
+net.load('saves/one.dat')
 
 # Czy obliczenia mają być na GPU
 if device == 'cuda':

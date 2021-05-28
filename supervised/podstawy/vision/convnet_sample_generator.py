@@ -1,7 +1,6 @@
 from random import randint
 
 import torch
-import torchvision.transforms.functional as TF
 from PIL import Image, ImageEnhance
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms as TS
@@ -40,23 +39,6 @@ class SuperposeSign(object):
         return self.__class__.__name__ + '()'
 
 
-transform_negative = TS.Compose(
-    [TS.Resize((256, 256)),
-     TS.RandomAffine(degrees=2, fillcolor=(0, 0, 0), translate=(0.05, 0)),
-     TS.GaussianBlur(kernel_size=3),
-     TS.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
-     # SuperposeSign(),
-     # TS.RandomAffine(degrees=30, fillcolor=(0, 0, 0), translate=(0.1, 0.1)),
-     TS.ToTensor()])
-
-transform_positive = TS.Compose(
-    [TS.Resize((256, 256)),
-     TS.RandomAffine(degrees=2, fillcolor=(0, 0, 0), translate=(0.05, 0)),
-     TS.GaussianBlur(kernel_size=3),
-     TS.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
-     TS.ToTensor()])
-
-
 def generate_transform(resolution=256, sign_filename=None):
     """
     Tworzy zestaw transformacji przygotowujących/randomizujących próbki.
@@ -93,11 +75,13 @@ def generate_sample(img_count, sign_filename=None):
                 res = images
             else:
                 res = torch.cat((res, images), 0)
-    if sign_filename is not None:
-        print(f'generated for [{sign_filename:10}]:', res.size())
-    else:
-        print(f'generated backgrounds:', res.size())
+    # if sign_filename is not None:
+    #     print(f'generated for [{sign_filename:10}]:', res.size())
+    # else:
+    #     print(f'generated backgrounds:', res.size())
     return res
 
 
 # generate_sample(3, 'sign.png')
+# generate_sample(3, 'm.png')
+# generate_sample(3, 'kali1.png')

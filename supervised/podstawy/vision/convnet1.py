@@ -59,72 +59,76 @@ device = 'cuda'
 
 # Parametry sieci
 RES = 256  # ile liczb wchodzi (długość listy)
-HID = 8  # ile neuronów w warstwie ukrytej
+HID = 12  # ile neuronów w warstwie ukrytej
 
 # Setup próbek zawierające znaki (SIGNS) które mają być wykrywane i klasyfikowane przez sieć
-N_POSITIVE = [30, 30, 30, 90]
-SIGNS = ['sign.png', 'm.png', 'kali128.png', None]
+N_POSITIVE = [160, 160, 160, 480]
+SIGNS = ['sign.png', 'm.png', 'kali1.png', None]
 nsigns = len(SIGNS)
 
-# Tworzenie sieci neuronowejy
+# Tworzenie sieci neuronowej
 net = MyNet(res=RES, hid=HID, noutput=nsigns)
 net = net.float()
 
 # N_NEGATIVE = 120  # liczba próbek treningowych zwracających "0"
-EPOCHS = 200
-BATCH_SIZE = 60
-LR = 0.001  # learning rate
+EPOCHS = 2000
+BATCH_SIZE = 120
+LR = 0.002  # learning rate
 
 # Wczytywanie poprzednio-zapisanej sieci
 # net.load('saves\\one.dat')    # wersja windows
-net.load('saves/one.dat')
+# net.load('saves/one.dat')
 
 if device == 'cuda':
     net = net.cuda()  # cała sieć kopiowana na GPU
 
+
 # ########################################
 # Przygotowanie danych do uczenia sieci
 
-# Obrazy zawierające próbki (SIGNS) na pozycjach początkowych + ostatni element tylko z tłami
-ssample = []
-for sign, count in zip(SIGNS, N_POSITIVE):
-    ssample.append(generate_sample(count, sign))  # krok generowania danych do uczenia sieci
 
-sample_sizes = [s.size()[0] for s in ssample]
-sample_count = sum(sample_sizes)
-print(sample_count)
+def generate_training_set():
+    # Obrazy zawierające próbki (SIGNS) na pozycjach początkowych + ostatni element tylko z tłami
+    ssample = []
+    for sign, count in zip(SIGNS, N_POSITIVE):
+        ssample.append(generate_sample(count, sign))  # krok generowania danych do uczenia sieci
 
-# Ustalenie outputu -- dla "SIGNS" ustawiamy kolejne jedynki
-# nsigns=3 → [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-w = [[0] * i + [1] + [0] * (nsigns - i - 1) for i in range(nsigns)]  # meh... taki oneliner...
+    sample_sizes = [ss.size()[0] for ss in ssample]
 
-soutput = [tensor(w[i] * sample_sizes[i], dtype=dtype, device=device) for i in range(nsigns)]
+    # Ustalenie outputu -- dla "SIGNS" ustawiamy kolejne jedynki
+    # nsigns=3 → [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    w = [[0] * i + [1] + [0] * (nsigns - i - 1) for i in range(nsigns)]  # meh... taki oneliner...
 
-# przerzucenie danych na GPU (NVIDIA) jeśli chcemy...
-if device == 'cuda':
-    for i in range(nsigns):
-        ssample[i] = ssample[i].cuda()
+    soutput = [tensor(w[i] * sample_sizes[i], dtype=dtype, device=device) for i in range(nsigns)]
 
-# jednolita lista sampli (wszystkie w jednym tensorze)
-sample = torch.cat(ssample, 0)
-output = torch.cat(soutput, 0)
+    # przerzucenie danych na GPU (NVIDIA) jeśli chcemy...
+    if device == 'cuda':
+        for i in range(nsigns):
+            ssample[i] = ssample[i].cuda()
 
-output = output.view(-1, nsigns)
-
-print('sample: ', sample.size())
-print('output: ', output.size())
+    # jednolita lista sampli (wszystkie w jednym tensorze)
+    sample_ = torch.cat(ssample, 0)
+    output_ = torch.cat(soutput, 0)
+    output_ = output_.view(-1, nsigns)
+    return sample_, output_
 
 
 # funkcja "tasujaca" karty-próbki stosowane do uczenia sieci
-def shuffle_samples_and_outputs(sample_count, sample, output):
-    per_torch = torch.randperm(sample_count)
-    shuffled_sample = sample[per_torch]
-    shuffled_output = output[per_torch]
+def shuffle_samples_and_outputs(sample_, output_):
+    size = sample_.size()[0]
+    per_torch = torch.randperm(size)
+    shuffled_sample = sample_[per_torch]
+    shuffled_output = output_[per_torch]
     return shuffled_sample, shuffled_output
 
 
-t_sample, t_output = shuffle_samples_and_outputs(sample_count, sample, output)
-# "krojenie" próbek na "batches" (grupy próbek, krok optymalizacji po przeliczeniu całej grupy)
+sample, output = generate_training_set()
+
+print('sample dimension: ', sample.size())
+print('output dimension: ', output.size())
+
+# tasowanie (shuffle) i "krojenie" próbek na "batches" (grupy próbek, krok optymalizacji po przeliczeniu całej grupy)
+t_sample, t_output = shuffle_samples_and_outputs(sample, output)
 b_sample = torch.split(t_sample, BATCH_SIZE)
 b_output = torch.split(t_output, BATCH_SIZE)
 
@@ -172,7 +176,14 @@ while epoch < EPOCHS:
 
     if epoch % 100 == 0:
         print('shuffle!')
-        t_sample, t_output = shuffle_samples_and_outputs(sample_count, sample, output)
+        t_sample, t_output = shuffle_samples_and_outputs(sample, output)
+        b_sample = torch.split(t_sample, BATCH_SIZE)
+        b_output = torch.split(t_output, BATCH_SIZE)
+
+    if epoch % 200 == 0:
+        print('generating new samples')
+        sample, output = generate_training_set()
+        t_sample, t_output = shuffle_samples_and_outputs(sample, output)
         b_sample = torch.split(t_sample, BATCH_SIZE)
         b_output = torch.split(t_output, BATCH_SIZE)
 

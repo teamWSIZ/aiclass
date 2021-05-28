@@ -26,7 +26,7 @@ class SuperposeSign(object):
 
     def __init__(self):
         # operacje na PIL.Image
-        sign = Image.open('sign.png').resize((64, 64))
+        sign = Image.open('kali1.png').resize((64, 64))
         # self.sign = sign.rotate(0, resample=Image.BICUBIC, expand=True)
         self.sign = sign
         self.mask = sign.copy().convert('L')  # 'cień'; "single channel image"
@@ -56,7 +56,7 @@ transform = TS.Compose(
      TS.RandomAffine(degrees=2, fillcolor=(0, 0, 0), translate=(0.05, 0)),
      TS.GaussianBlur(kernel_size=3),
      TS.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
-     # SuperposeSign(),
+     SuperposeSign(),
      # TS.RandomAffine(degrees=30, fillcolor=(0, 0, 0), translate=(0.1, 0.1)),
      TS.ToTensor()])
 
