@@ -8,6 +8,26 @@ N = 20  # ile mamy pól
 FORWARD = 0
 BACKWARD = 1
 
+"""
+Stan gry:
+gracz A na polu a w [0 .. N-1]
+gracz B na polu b w [0 .. N-1] 
+x = a * N + b
+
+a = x % N
+b = x - a * N
+"""
+
+
+def decode_state(x):
+    a = x % N
+    b = x - a * N
+    return a, b
+
+
+def encode_state(a, b):
+    return a * N + b
+
 
 def print_q(q: List[List[float]], normalize=False):
     scale = 1
@@ -20,25 +40,37 @@ def print_q(q: List[List[float]], normalize=False):
         print()
 
 
-def fixed_reward(state: int):
-    if state == 0:
-        return 2
-    if state == N - 1:
-        return 10
-    return 0
+def fixed_reward(state: int, is_A_player=True):
+    a, b = decode_state(state)
+    if is_A_player:
+        if a == N // 2:
+            return 10
+        if b == N // 2:
+            return -10
+        return 0
+    else:
+        if a == N // 2:
+            return -10
+        if b == N // 2:
+            return 10
+        return 0
 
 
 def new_state(state, action):
     """
-    :return: Nowy "stan" (tu: pozycja na osi) w zależności od decyzji.
+    Trzeba zakodować akcje... czyli
+    A: -1,0,1 ........ action = 0,1,2 ...
     """
-    if action == BACKWARD:
-        return 0  # decyzja "w lewo" -- zawsze lądujemy na polu nr 0
-    if action == FORWARD:
-        if state < N - 1:
-            return state + 1
-        else:
-            return N - 1  # odbijamy się od prawej ściany
+    # dla A:
+    a, b = decode_state(state)
+    if action == 0:
+        a -= 1
+    if action == 2:
+        a += 1
+    a = a % N
+
+    # todo: dodać do dla "b"
+    return encode_state(a, b)
 
 
 def symbol(action):
@@ -80,9 +112,9 @@ if __name__ == '__main__':
     for epoch in range(EPOCHS):
         x = randint(0, EPOCHS - 1)
         if x < epoch:
-            action = get_greedy_action(state, Q)    # początkowo używaj losowych akcji
+            action = get_greedy_action(state, Q)  # początkowo używaj losowych akcji
         else:
-            action = get_random_action(state)   # później raczej kieruj się już znanymi "expected reward"
+            action = get_random_action(state)  # później raczej kieruj się już znanymi "expected reward"
 
         # SYMULATOR
         n_state = new_state(state, action)  # z "symulatora"
