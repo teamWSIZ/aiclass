@@ -2,7 +2,6 @@ from random import randint, choice
 
 from reinforcement_learning.tic_tac_toe.ttt_utils import print_state
 
-print(choice([1,2,3]))
 
 
 # if __name__ == '__main__':
