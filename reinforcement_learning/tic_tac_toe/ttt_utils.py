@@ -59,7 +59,7 @@ def valid_moves(state: List[int], cross=True):
     return moves
 
 
-def apply_move(state, move):
+def apply_move(state: List[float], move):
     """
     :return: stan po zaaplikowaniu ruchu
     """

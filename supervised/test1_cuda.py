@@ -37,7 +37,7 @@ class MyNet(nn.Module):
 
 dtype = torch.double
 # device = 'cpu'  # gdzie wykonywać obliczenia
-device = 'cpu'
+device = 'cuda'
 N = 30  # ile liczb wchodzi (długość listy)
 HID = 2  # ile neuronów w warstwie ukrytej
 N_POSITIVE = 5
@@ -52,7 +52,7 @@ LR = 0.01
 # Net creation
 net = MyNet(N, HID)
 net = net.double()
-net.load('saves/one.dat')
+# net.load('saves/one.dat')
 
 # Czy obliczenia mają być na GPU
 if device == 'cuda':

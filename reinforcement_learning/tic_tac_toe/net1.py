@@ -38,69 +38,30 @@ class TicTacToeNet(nn.Module):
         torch.save(self.state_dict(), filename)
 
 
-dtype = torch.double
-# device = 'cpu'  # gdzie wykonywać obliczenia
-device = 'cpu'
+dtype = torch.float
+device = 'cpu'  # lub 'cuda'
 IN_SIZE = 18  # ile liczb wchodzi (długość listy)
-HID = 5  # ile neuronów w warstwie ukrytej
+HID = 3  # ile neuronów w warstwie ukrytej
 OUT_SIZE = 9  # proponowane ruchy dla "cross" (trzeba sprawdzić czy są "valid")
 
-EPOCHS = 1000
+EPOCHS = 10000
 LR = 0.01
+BATCH_SIZE = 50
 
 # Net creation
 net = TicTacToeNet(IN_SIZE, HID, OUT_SIZE)
-net = net.double()
+# net = net.double()
 # net.load('saves/one.dat')
 
 if device == 'cuda':
     net = net.cuda()  # cała sieć kopiowana na GPU
 
-# Próbki napewno dodatnie
-# sample1, output1 = gen_all_samples_1_distance_given(N, 2)
-# Próbki losowe
-# sample_r, output_r = gen_random_trainset_1twice_distance_given(N, N_RANDOM, 2)
-
-# jednolita lista sampli, próbki dodatnie NPOSITIVE razy
-# sample = []
-# output = []
-# for _ in range(N_POSITIVE):
-#     sample.extend(sample1)
-#     output.extend(output1)
-# sample.extend(sample_r)
-# output.extend(output_r)
-
-# zamiana próbek na tensory (możliwa kopia do pamięci GPU)
-# t_sample = tensor(sample, dtype=dtype, device=device)
-# t_output = tensor(output, dtype=dtype, device=device)
-
-# przetasowanie całośći
-# sample_count = t_sample.size()[0]
-# per_torch = torch.randperm(sample_count)
-# t_sample = t_sample[per_torch]
-# t_output = t_output[per_torch]
-
-# "krojenie" próbek na "batches" (grupy próbek, krok optymalizacji po przeliczeniu całej grupy)
-# b_sample = torch.split(t_sample, BATCH_SIZE)
-# b_output = torch.split(t_output, BATCH_SIZE)
-
 # Training setup
 loss_function = nn.MSELoss(reduction='mean')
 optimizer = optim.SGD(net.parameters(), lr=LR, momentum=0.9)  # będzie na GPU, jeśli gpu=True
 
-# todo !!!!!
-s = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0]
-ts = tensor(s, dtype=dtype)
-prediction = net(ts)
-print_state(s)
-print('początkowa predykcja:', prediction)
-pd = prediction.data
 
-
-# print(pd.tolist()[0])
-
-
-def expected_reward(state, ax, net: TicTacToeNet, discount_lambda):
+def better_prediction_after_move(net: TicTacToeNet, state: List[float], move_x, discount_lambda) -> float:
     """
     Funkcja podająca spodziewaną nagrodę "o 1 ruch dalej" ...
     Funkcja ocenia wyniky wykonania ruchu "ax" (przez "x") w stanie "state"
@@ -109,7 +70,7 @@ def expected_reward(state, ax, net: TicTacToeNet, discount_lambda):
     pozycji "x"-a.
     :return:
     """
-    nstate_o = apply_move(state, ax)
+    nstate_o = apply_move(state, move_x)
     if is_winning(nstate_o[9:]):
         return -100  # nawet przed ruchem pozycja była przegrana
     if is_winning(nstate_o[:9]):
@@ -132,51 +93,88 @@ def expected_reward(state, ax, net: TicTacToeNet, discount_lambda):
     return discount_lambda * best_for_o
 
 
-# valid_x_moves = valid_moves(s, cross=True)  # dostępne ruchy dla "x"
-# for m in valid_x_moves:
-#     print_state(apply_move(s, m))
-#     print('"lepsza" predykcja wartości dla tego ruchu: ', expected_reward(s, m, net, 0.9))
-#     print('---')
+def get_updated_prediction(net, state: List[float], move, discount_lambda, verbose=False) -> List[float]:
+    t_state = tensor(state, dtype=dtype, device=device)  # stan-tensor; na niego można aplikować `net`
+    prediction = net(t_state)[0].tolist()
+    if verbose: print('predykcja początkowa:', format_list(prediction))
+    better_prediction = better_prediction_after_move(net, state, move, discount_lambda)
+    # print(f'lepsza predykcja wartości dla ruchu: {move}', better_prediction)
+    at = move.index(1)  # move ma tylko jedną jedynkę
+    prediction[at] = better_prediction
+    if verbose: print(f'predykcja aktualna  : {format_list(prediction)}, at={at}')
+    return prediction
 
-for i in range(15):
-    s = random_state(3, 3)
-    print_state(s)
-    st = tensor(s, dtype=dtype, device=device)
-    current = net(st)[0]
-    print('predykcja początkowa:', current.tolist())
-    m = choice(valid_moves(s, cross=True))  # losowy ruch
-    er = expected_reward(s, m, net, 0.9)
-    print(net(torch.cat((st,st,st))))
-    print(f'"lepsza" predykcja wartości dla ruchu: {m}', er)
-    at = m.index(1)
-    current[at] = er
-    print(f'predykcja aktualna  : {current.tolist()}, at={at}')
-    # print(f's={s} updated:{}')
-    print('---------------')
 
-# Training
-# for epoch in range(EPOCHS):
-#     total_loss = 0
-#     for (batch_s, batch_o) in zip(b_sample, b_output):
-#         optimizer.zero_grad()
-#         # print(batch_in)
-#         prediction = net(batch_s)
-#         prediction = prediction.view(-1)  # size: [5,1] -> [5] (flat, same as b_out)
-#         loss = loss_function(prediction, batch_o)
-#
-#         if EPOCHS - epoch < 30:
-#             # pokazujemy wyniki dla 30 ostatnich przypadków, by sprawdzić co sieć przewiduje tak naprawdę
-#             print('---------')
-#             print(f'input: {batch_s.tolist()}')
-#             print(f'pred:{format_list(prediction.tolist())}')
-#             print(f'outp:{format_list(batch_o.tolist())}')
-#
-#         total_loss += loss
-#
-#         loss.backward()
-#         optimizer.step()
-#     if epoch % 20 == 0:
-#         print(f' epoch:{epoch}, loss:{total_loss:.6f}')
+def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=False) -> Tuple:
+    """
+    Używając sieci "net" sprawdzamy "krok w przód" dla `sample_size` pozycji-ruchów, generując
+    poprawione predykcje dla sieci. Predykcje te można wykorzystać w kolejnej iteracji uczenia sieci.
+    :return:
+    """
+    samples = []
+    outputs = []
+
+    while len(samples) < sample_size:
+        moves_done = randint(3, 4)
+        state = random_state(moves_done, moves_done)
+        move = choice(valid_moves(state, cross=True))  # losowy ruch
+        prediction = get_updated_prediction(net, state, move, DISCOUNT_LAMBDA, verbose)
+        samples.append(state)
+        outputs.append(prediction)
+        if verbose: print('-.-' * 20)
+    return samples, outputs
+
+
+def format_list(list) -> str:
+    s = '['
+    for x in list:
+        s += f'{x:5.2f}, '
+    return s[:-2] + ']'
+
+
+def convert_to_batches_tensors(samples: List[List[float]], outputs: List[List[float]], batch_size):
+    # zamiana próbek na tensory (możliwa kopia do pamięci GPU)
+    t_sample = tensor(samples, dtype=dtype, device=device)
+    t_output = tensor(outputs, dtype=dtype, device=device)
+
+    # przetasowanie całośći
+    sample_count = t_sample.size()[0]
+    per_torch = torch.randperm(sample_count)
+    t_sample = t_sample[per_torch]
+    t_output = t_output[per_torch]
+
+    # "krojenie" próbek na "batches" (grupy próbek, krok optymalizacji po przeliczeniu całej grupy)
+    b_sample = torch.split(t_sample, batch_size)
+    b_output = torch.split(t_output, batch_size)
+    return b_sample, b_output
+
+
+def train_net(net, samples, outputs, n_epochs):
+    b_samples, b_outputs = convert_to_batches_tensors(samples, outputs, BATCH_SIZE)
+
+    for epoch in range(n_epochs):
+        total_loss = 0
+        for (batch_s, batch_o) in zip(b_samples, b_outputs):
+            optimizer.zero_grad()
+            prediction = net(batch_s)
+            # print(batch_s.size())
+            # print(batch_o.size())
+            # print(prediction.size())
+            loss = loss_function(prediction.view(-1), batch_o.view(-1))
+
+            total_loss += loss
+
+            loss.backward()
+            optimizer.step()
+        if epoch % 10 == 0:
+            print(f' epoch:{epoch}, loss:{total_loss:.6f}')
+    pass
+
+
+for i in range(2000):
+    ss, oo = generate_updated_predictions(net, 0.95, 10000, verbose=(i % 5 == 0))
+    train_net(net, samples=ss, outputs=oo, n_epochs=max(20, i // 10))
+    print('-' * 10)
 
 # Optional result save
 # net.save('saves/one.dat')
