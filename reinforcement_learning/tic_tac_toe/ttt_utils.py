@@ -2,6 +2,8 @@ from random import randint
 from typing import List
 
 # [... ... ...   ... ... ...] == stan == 18 liczb
+from cachetools import cached, LRUCache
+
 from reinforcement_learning.tic_tac_toe.bity import encode_state
 
 
@@ -47,6 +49,7 @@ def print_state(state: List[int]):
         print(*board[i * 3:(i + 1) * 3])
 
 
+# @cached(cache=LRUCache(maxsize=10000))
 def valid_moves(state: List[int], cross=True):
     """
     Ruch to tablica 18 elementów; pierwsze 9 odpowiadają ruchom "x"-a; pozostałe ruchom "o"-ka;

@@ -161,6 +161,8 @@ def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=Fals
         else:
             move = choice(v_moves)  # losowy ruch
 
+        # optymalizacja #1: jeli aktualna pozycja jest wygrywajca/przegrywajca, to jej wartość ma być ustalona
+        # → dla danego stanu update'ujemy nie tylko wynik dla pozycji `move`, ale też dla innych
         if is_winning(state[:9]):
             prediction = [100] * 9
         elif is_winning(state[9:]):
