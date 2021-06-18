@@ -5,7 +5,8 @@ from torch import nn, optim
 import torch.nn.functional as funct
 
 # https://pytorch.org/tutorials/beginner/saving_loading_models.html
-from reinforcement_learning.tic_tac_toe.ttt_utils import apply_move, valid_moves, is_winning, print_state, random_state
+from reinforcement_learning.tic_tac_toe.ttt_utils import apply_move, valid_moves, is_winning, print_state, random_state, \
+    is_draw
 from supervised.helper import *
 
 
@@ -46,7 +47,7 @@ OUT_SIZE = 9  # proponowane ruchy dla "cross" (trzeba sprawdzić czy są "valid"
 
 EPOCHS = 10000
 LR = 0.01
-BATCH_SIZE = 50
+BATCH_SIZE = 500
 
 # Net creation
 net = TicTacToeNet(IN_SIZE, HID, OUT_SIZE)
@@ -93,19 +94,24 @@ def better_prediction_after_move(net: TicTacToeNet, state: List[float], move_x, 
     return discount_lambda * best_for_o
 
 
-def get_updated_prediction(net, state: List[float], move, discount_lambda, verbose=False) -> List[float]:
+def get_updated_prediction(net, state: List[int], move, discount_lambda, verbose=False) -> List[float]:
     t_state = tensor(state, dtype=dtype, device=device)  # stan-tensor; na niego można aplikować `net`
     prediction = net(t_state)[0].tolist()
-    if verbose: print('predykcja początkowa:', format_list(prediction))
+
+    if verbose:
+        print('stan:')
+        print_state(state)
+        print('predykcja początkowa:', format_list(prediction))
     better_prediction = better_prediction_after_move(net, state, move, discount_lambda)
     # print(f'lepsza predykcja wartości dla ruchu: {move}', better_prediction)
     at = move.index(1)  # move ma tylko jedną jedynkę
     prediction[at] = better_prediction
-    if verbose: print(f'predykcja aktualna  : {format_list(prediction)}, at={at}')
+    if verbose:
+        print(f'predykcja aktualna  : {format_list(prediction)}, at={at}')
     return prediction
 
 
-def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=False) -> Tuple:
+def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=False, follow_best_move_chance=0.0) -> Tuple:
     """
     Używając sieci "net" sprawdzamy "krok w przód" dla `sample_size` pozycji-ruchów, generując
     poprawione predykcje dla sieci. Predykcje te można wykorzystać w kolejnej iteracji uczenia sieci.
@@ -117,8 +123,34 @@ def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=Fals
     while len(samples) < sample_size:
         moves_done = randint(3, 4)
         state = random_state(moves_done, moves_done)
-        move = choice(valid_moves(state, cross=True))  # losowy ruch
-        prediction = get_updated_prediction(net, state, move, DISCOUNT_LAMBDA, verbose)
+
+        v_moves = valid_moves(state, cross=True)
+        x = randint(0, 100)
+        if x / 100 < follow_best_move_chance:
+            # select best
+            values = net(state).tolist()
+            vm = []
+            for i in range(9):
+                vm.append((values[i], i))
+            vm.sort(reverse=True)
+            for (v, at) in vm:
+                move_try = [1 if i == at else 0 for i in range(9)]
+                # todo: ruchy niedozwolone powinny miec prediction = -30
+                if move_try in v_moves:
+                    move = move_try
+                    break
+                    # todo: check this!
+        else:
+            move = choice(v_moves)  # losowy ruch
+
+        if is_winning(state[:9]):
+            prediction = [100] * 9
+        elif is_winning(state[9:]):
+            prediction = [-100] * 9
+        elif is_draw(state):
+            prediction = [0] * 9
+        else:
+            prediction = get_updated_prediction(net, state, move, DISCOUNT_LAMBDA, verbose)
         samples.append(state)
         outputs.append(prediction)
         if verbose: print('-.-' * 20)
@@ -166,13 +198,19 @@ def train_net(net, samples, outputs, n_epochs):
 
             loss.backward()
             optimizer.step()
-        if epoch % 10 == 0:
+        if epoch % 5 == 0:
             print(f' epoch:{epoch}, loss:{total_loss:.6f}')
     pass
 
 
+# kod uzywamy sieci neuronowej "net"; na poczatku losowej...
 for i in range(2000):
-    ss, oo = generate_updated_predictions(net, 0.95, 10000, verbose=(i % 5 == 0))
+    # generujemy nowe dane do uczenia sieci -- dane ktore zawieraja "lepsze" oceny pozycji
+    ss, oo = generate_updated_predictions(net, 0.95, sample_size=1000,
+                                          verbose=(i % 5 == 0),
+                                          follow_best_move_chance=i / 200)
+
+    # uczenie sieci neuronowej "lepszymi" predykcjami
     train_net(net, samples=ss, outputs=oo, n_epochs=max(20, i // 10))
     print('-' * 10)
 

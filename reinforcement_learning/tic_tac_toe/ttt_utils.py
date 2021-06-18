@@ -1,6 +1,9 @@
 from random import randint
 from typing import List
 
+# [... ... ...   ... ... ...] == stan == 18 liczb
+from reinforcement_learning.tic_tac_toe.bity import encode_state
+
 
 def is_winning(state: List[int]):
     """
@@ -20,6 +23,14 @@ def is_winning(state: List[int]):
     if state[2] == 1 and state[4] == 1 and state[6] == 1:
         return True
     return False
+
+
+def is_draw(state):
+    s = sum(state)
+    if s == 18 and not is_winning(state[:9]) and not is_winning(state[9:]):
+        return True
+    else:
+        return False
 
 
 def print_state(state: List[int]):
@@ -49,6 +60,11 @@ def valid_moves(state: List[int], cross=True):
     :return: tablica dostępnych ruchów (tablic 18-elementowych)
 
     """
+    enc = encode_state(state)
+    if enc in valid_moves_cache:
+        return valid_moves_cache[enc]
+
+    print('obliczamy ruchy')
     moves = []
     offset = 0 if cross else 9
     for i in range(9):
@@ -56,7 +72,12 @@ def valid_moves(state: List[int], cross=True):
             move = [0] * 18
             move[i + offset] = 1
             moves.append(move)
+
+    valid_moves_cache[enc] = moves
     return moves
+
+
+valid_moves_cache = dict()
 
 
 def apply_move(state: List[float], move):
@@ -84,7 +105,6 @@ def best_moves(state, qvalues):
     return moves
 
 
-
 def random_state(n_cross, n_circle):
     s = [0] * 18
 
@@ -101,18 +121,40 @@ def random_state(n_cross, n_circle):
 
     return s
 
+
+"""
+Todo: spróbować "z-cache-ować" informację, którą obliczamy w valid_moves(state)... czyli 
+tak zapamiętać wszystkie "valid moves", by je potem zwracać bezpośrednio ze struktury danych, bez
+obliczania. 
+
+
+Cache: mapa (lub dict) odwzorowująca argument funkcji (tu: stan) w wartości zwracane z funkcji (tu listę list int-ów)
+
+
+"""
+
 if __name__ == '__main__':
     # print(is_winning([1, 1, 1, 0, 0, 0, 0, 0, 0]), True)
     # print(is_winning([1, 1, 0, 0, 0, 0, 0, 0, 0]), False)
     # print(is_winning([1, 1, 0, 1, 0, 0, 1, 0, 0]), True)
-    print(is_winning([1, 0, 0, 0, 1, 0, 1, 0, 1]), True)
-    s = [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0]
-    print_state(s)
+    # print(is_winning([1, 0, 0, 0, 1, 0, 1, 0, 1]), True)
+    # s = [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0]
+    # print_state(s)
     # move = [0,0,0,0,0,0,0,0,0, 0,0,0,1,0,0,0,0,0]
+
+    s = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+    print_state(s)
+    vm = valid_moves(s, cross=True)
+    print(vm)
+    for m in vm:
+        print('---')
+        print_state(m)
+    # print(is_winning(s[9:]))
+
     # nstate = apply_move(s, move)
     # print(nstate)
     # print_state(nstate)
-    next_moves = valid_moves(s, cross=False)
-    for m in next_moves:
-        print('---')
-        print_state(apply_move(s, m))
+    # next_moves = valid_moves(s, cross=False)
+    # for m in next_moves:
+    #     print('---')
+    #     print_state(apply_move(s, m))
