@@ -17,4 +17,4 @@ def goo(a, b, c) -> int:
 
 for i in range(300):
     print(foo(randint(0, 10)))
-    print(goo(*[1, 1, 8]))
+    # print(goo(*[1, 1, 8]))

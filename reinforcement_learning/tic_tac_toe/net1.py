@@ -62,7 +62,7 @@ loss_function = nn.MSELoss(reduction='mean')
 optimizer = optim.SGD(net.parameters(), lr=LR, momentum=0.9)  # będzie na GPU, jeśli gpu=True
 
 
-def better_prediction_after_move(net: TicTacToeNet, state: List[float], move_x, discount_lambda) -> float:
+def better_prediction_after_move(net: TicTacToeNet, state: List[int], move_x, discount_lambda) -> float:
     """
     Funkcja podająca spodziewaną nagrodę "o 1 ruch dalej" ...
     Funkcja ocenia wyniky wykonania ruchu "ax" (przez "x") w stanie "state"
@@ -80,6 +80,7 @@ def better_prediction_after_move(net: TicTacToeNet, state: List[float], move_x, 
 
     valid_o_moves = valid_moves(nstate_o, cross=False)  # wszystkie ruchy gracza "o"
     best_for_o = 100
+    best_final_state = None  #todo: tu sprawdzimy stan po najlepszym ruchu "o"
     for ao in valid_o_moves:
         nstate_x = apply_move(nstate_o, ao)
         if is_winning(nstate_x[9:]):
@@ -91,6 +92,11 @@ def better_prediction_after_move(net: TicTacToeNet, state: List[float], move_x, 
 
         # o szuka stanu w którym najlepszy ruch dla x daje x-owi jak najmniej
         best_for_o = min(best_for_o, best_for_x)
+    # todo: !!!!!!!!!!!!!!!
+    #  tutaj można zwrócić nie tylko wartość (lepszej predykcji), ale też stan, w którym znajdzie się plansza
+    #  po dwóch ruchach:
+    #    - ruchu "move" dla x-a,
+    #    - ruchu "ao" prowadzącego do "best_for_o"
     return discount_lambda * best_for_o
 
 
@@ -111,7 +117,18 @@ def get_updated_prediction(net, state: List[int], move, discount_lambda, verbose
     return prediction
 
 
-def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=False, follow_best_move_chance=0.0) -> Tuple:
+def set_prediction_of_invalid_moves(prediction: List[float], v_moves: List[List[int]], fixed_value=-30):
+    """
+    Zmieniamy "prediction" tak by było = fixed_value, dla ruchów których nie można wykonać.
+    """
+    for position in range(9):
+        move = [1 if i == position else 0 for i in range(18)]
+        if move not in v_moves:
+            prediction[position] = fixed_value
+
+
+def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=False,
+                                 follow_best_move_chance=0.0) -> Tuple:
     """
     Używając sieci "net" sprawdzamy "krok w przód" dla `sample_size` pozycji-ruchów, generując
     poprawione predykcje dla sieci. Predykcje te można wykorzystać w kolejnej iteracji uczenia sieci.
@@ -122,20 +139,21 @@ def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=Fals
 
     while len(samples) < sample_size:
         moves_done = randint(3, 4)
-        state = random_state(moves_done, moves_done)
+        state = random_state(moves_done, moves_done)  # losujemy stan z moves_done 'x'-w i 'o'
 
         v_moves = valid_moves(state, cross=True)
         x = randint(0, 100)
-        if x / 100 < follow_best_move_chance:
+        if len(v_moves) > 0 and x / 100 < follow_best_move_chance:
             # select best
-            values = net(state).tolist()
-            vm = []
+            t_state = tensor(state, dtype=dtype, device=device)
+            values = net(t_state).tolist()
+            move_values = []
             for i in range(9):
-                vm.append((values[i], i))
-            vm.sort(reverse=True)
-            for (v, at) in vm:
-                move_try = [1 if i == at else 0 for i in range(9)]
-                # todo: ruchy niedozwolone powinny miec prediction = -30
+                move_values.append((values[0][i], i))
+            move_values.sort(reverse=True)
+            move = None
+            for (value, position) in move_values:
+                move_try = [1 if i == position else 0 for i in range(18)]
                 if move_try in v_moves:
                     move = move_try
                     break
@@ -151,10 +169,26 @@ def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=Fals
             prediction = [0] * 9
         else:
             prediction = get_updated_prediction(net, state, move, DISCOUNT_LAMBDA, verbose)
+
+        set_prediction_of_invalid_moves(prediction, v_moves, fixed_value=0)
+
         samples.append(state)
         outputs.append(prediction)
         if verbose: print('-.-' * 20)
     return samples, outputs
+
+
+"""
+Uczenie przez "granie" w x-o; 
+... to musi być funkcja do "update prediction"...
+- musi zaczynać od "state = [0]*18", czyli pusta plansza
+- wykonujemy ruch x-a na podstawie net(state)... czyli aktualnych predykcji wartości ruchów...
+- ?? jaki ruch ma wykonać 'o'... zróbmy "optymalny"... czyli taki (z dozwolonych), by net(state') 
+  (po jego wykonaniu) była dla nas (x-ów) jak najgorsza...
+- oprócz zmiany predykcji, zmieniamy stan.. 
+
+
+"""
 
 
 def format_list(list) -> str:

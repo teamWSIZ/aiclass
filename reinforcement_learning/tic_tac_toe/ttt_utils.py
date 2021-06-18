@@ -64,7 +64,6 @@ def valid_moves(state: List[int], cross=True):
     if enc in valid_moves_cache:
         return valid_moves_cache[enc]
 
-    print('obliczamy ruchy')
     moves = []
     offset = 0 if cross else 9
     for i in range(9):
@@ -105,7 +104,7 @@ def best_moves(state, qvalues):
     return moves
 
 
-def random_state(n_cross, n_circle):
+def random_state(n_cross, n_circle) -> List[int]:
     s = [0] * 18
 
     # losowanie "x"-ów
