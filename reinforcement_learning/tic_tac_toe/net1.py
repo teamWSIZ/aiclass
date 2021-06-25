@@ -55,7 +55,7 @@ DEFEAT = 0
 # Net creation
 net = TicTacToeNet(IN_SIZE, HID, OUT_SIZE)
 # net = net.double()
-# net.load('saves/one.dat')
+net.load('saves/one.dat')
 
 if device == 'cuda':
     net = net.cuda()  # cała sieć kopiowana na GPU
@@ -149,7 +149,7 @@ def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=Fals
     while len(samples) < sample_size:
         # wybór pozycji początkowej
         if current_board is None:
-            moves_done = randint(3, 4)
+            moves_done = randint(1, 2)
             state = random_state(moves_done, moves_done)  # losujemy stan z moves_done 'x'-w i 'o'
         else:
             state = current_board
@@ -264,18 +264,58 @@ def train_net(net, samples, outputs, n_epochs):
     pass
 
 
-# kod uzywamy sieci neuronowej "net"; na poczatku losowej...
-for i in range(2200):
-    print(f'---- ROUND {i}')
-    # generujemy nowe dane do uczenia sieci -- dane ktore zawieraja "lepsze" oceny pozycji
-    ss, oo = generate_updated_predictions(net, DISCOUNT_LAMBDA=0.95, sample_size=5000,
-                                          verbose=(i % 10 == 0),
-                                          follow_best_move_chance=i / 700, play_game=False)
+def RL_teaching_loop():
+    # kod uzywamy sieci neuronowej "net"; na poczatku losowej...
+    for i in range(40):
+        print(f'---- ROUND {i}')
+        # generujemy nowe dane do uczenia sieci -- dane ktore zawieraja "lepsze" oceny pozycji
+        ss, oo = generate_updated_predictions(net, DISCOUNT_LAMBDA=0.95, sample_size=2500,
+                                              verbose=(i % 10 == 0),
+                                              follow_best_move_chance=i / 700, play_game=False)
 
-    # uczenie sieci neuronowej "lepszymi" predykcjami
-    train_net(net, samples=ss, outputs=oo, n_epochs=100)
-    print('-' * 10)
+        # uczenie sieci neuronowej "lepszymi" predykcjami
+        train_net(net, samples=ss, outputs=oo, n_epochs=100)
+        print('-' * 10)
 
-# Optional result save
-net.save('saves/one.dat')
-print('net saved')
+    # Optional result save
+    net.save('saves/one.dat')
+    print('net saved')
+
+
+def interactive_play():
+    state = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ]
+    while True:
+        print_state(state)
+        o_move_at = int(input('> ')) + 9
+        move = [1 if i == o_move_at else 0 for i in range(18)]
+        nxstate = apply_move(state, move)
+        print_state(nxstate)
+
+        # wybór najlepszego ruchu bota...
+        # todo
+        t_state = tensor(nxstate, dtype=dtype, device=device)
+        values = net(t_state).tolist()[0]
+        print('predykcja wartości ruchów x-a:', format_list(values))
+
+        move_values = []
+        for i in range(9):
+            move_values.append((values[i], i))
+        move_values.sort(reverse=True)  # posortowane od ruchów o największej wartości
+        move = None
+        v_moves = valid_moves(nxstate)
+        for (value, position) in move_values:
+            # sprawdzenie który ruch o największej wartości jest dozwolony
+            move_try = [1 if i == position else 0 for i in range(18)]
+            if move_try in v_moves:
+                move = move_try
+                break
+        print('wybrałem ruch:', move)
+        no_state = apply_move(nxstate, move)
+        state = no_state
+        print('-------')
+
+
+
+if __name__ == '__main__':
+    # RL_teaching_loop()
+    interactive_play()
