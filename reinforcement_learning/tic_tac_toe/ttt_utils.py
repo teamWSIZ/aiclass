@@ -28,6 +28,9 @@ def is_winning(state: List[int]):
 
 
 def is_draw(state):
+    """
+    :return: True jeśli plansza jest pełna i nikt nie wygrał
+    """
     s = sum(state)
     if s == 18 and not is_winning(state[:9]) and not is_winning(state[9:]):
         return True
