@@ -26,8 +26,13 @@ class TicTacToeNet(nn.Module):
     def forward(self, x):
         """ Main function for evaluation of input """
         x = x.view(-1, self.sz)
-        # print(x.size())  # batchsize x self.sz
         x = self.flat1(x)
+        # print(x.size()[0])  # batchsize x HID1
+        for j in range(x.size()[0]):
+            for i in range(1):
+                x[j][i] = 0
+        # print(x)
+
         # print(x.size()) # batchsize x self.hid
         x = self.flatH(funct.relu(x))  # extra HID2 layer
         x = self.flat2(funct.relu(x))
@@ -44,12 +49,12 @@ class TicTacToeNet(nn.Module):
 dtype = torch.float
 device = 'cpu'  # lub 'cuda'
 IN_SIZE = 18  # ile liczb wchodzi (długość listy)
-HID = 20  # ile neuronów w warstwie ukrytej
-HID2 = 20  # ile neuronów w warstwie ukrytej
+HID = 50  # ile neuronów w warstwie ukrytej
+HID2 = 50  # ile neuronów w warstwie ukrytej
 OUT_SIZE = 9  # proponowane ruchy dla "cross" (trzeba sprawdzić czy są "valid")
 
-EPOCHS = 1200
-ROUNDS = 60
+EPOCHS = 600
+ROUNDS = 5
 LR = 0.001
 BATCH_SIZE = 10000
 
@@ -64,7 +69,7 @@ MAX_DONE = 4
 # Net creation
 net = TicTacToeNet(IN_SIZE, HID, HID2, OUT_SIZE)
 # net = net.double()
-net.load('saves/two.dat')
+net.load('saves/gg.dat')
 
 if device == 'cuda':
     net = net.cuda()  # cała sieć kopiowana na GPU
@@ -112,7 +117,7 @@ def better_prediction_after_move(net: TicTacToeNet, state: List[int], move_x, di
         nnstate_x = apply_move(nstate_o, ao)
         if is_winning(nnstate_x[9:]):
             # kółko ma ruch wygrywający, czyli nagroda dla "x" za ruch "ax" w stanie "state" jest DEFEAT
-            return -DEFEAT, state
+            return DEFEAT, state
         nnstate_x_t = tensor(nnstate_x, dtype=dtype, device=device)
 
         # predykcja wartości stanu "nnstate_x" przez akutalną sieć neuronową
@@ -293,7 +298,7 @@ def RL_teaching_loop():
     for i in range(ROUNDS):
         print(f'---- ROUND {i}')
         # generujemy nowe dane do uczenia sieci -- dane ktore zawieraja "lepsze" oceny pozycji
-        ss, oo = generate_updated_predictions(net, DISCOUNT_LAMBDA=0.95, sample_size=50000,
+        ss, oo = generate_updated_predictions(net, DISCOUNT_LAMBDA=0.95, sample_size=30000,
                                               verbose=(i % 10 == 0),
                                               follow_best_move_chance=0.30, play_game=False)
 
@@ -302,7 +307,7 @@ def RL_teaching_loop():
         print('-' * 10)
 
     # Optional result save
-    net.save('saves/two.dat')
+    net.save('saves/gg.dat')
     print('net saved')
 
 
@@ -310,12 +315,16 @@ def interactive_play():
     state = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ]
     at = randint(0, 8)
     state = [1 if i == at else 0 for i in range(18)]
+    state = [0] * 18
     while True:
-        print_state(state)
-        o_move_at = int(input('> ')) + 9
-        move = [1 if i == o_move_at else 0 for i in range(18)]
-        nxstate = apply_move(state, move)
-        print_state(nxstate)
+        if sum(state) != 0:
+            print_state(state)
+            o_move_at = int(input('> ')) + 9
+            move = [1 if i == o_move_at else 0 for i in range(18)]
+            nxstate = apply_move(state, move)
+            print_state(nxstate)
+        else:
+            nxstate = state # pusta plansza
 
         # wybór najlepszego ruchu bota...
         # todo
