@@ -14,12 +14,14 @@ class TicTacToeNet(nn.Module):
         Simple NN: input(sz) ---> flat(hid) ---> 1
     """
 
-    def __init__(self, sz, hid, out_sz):
+    def __init__(self, sz, hid, hid2, out_sz):
         super().__init__()
         self.hid = hid
+        self.hid2 = hid2
         self.sz = sz
         self.flat1 = nn.Linear(sz, hid, True)
-        self.flat2 = nn.Linear(hid, out_sz, True)
+        self.flatH = nn.Linear(hid, hid2, True)
+        self.flat2 = nn.Linear(hid2, out_sz, True)
 
     def forward(self, x):
         """ Main function for evaluation of input """
@@ -27,6 +29,7 @@ class TicTacToeNet(nn.Module):
         # print(x.size())  # batchsize x self.sz
         x = self.flat1(x)
         # print(x.size()) # batchsize x self.hid
+        x = self.flatH(funct.relu(x))  # extra HID2 layer
         x = self.flat2(funct.relu(x))
         return funct.relu(x)
 
@@ -41,21 +44,27 @@ class TicTacToeNet(nn.Module):
 dtype = torch.float
 device = 'cpu'  # lub 'cuda'
 IN_SIZE = 18  # ile liczb wchodzi (długość listy)
-HID = 12  # ile neuronów w warstwie ukrytej
+HID = 20  # ile neuronów w warstwie ukrytej
+HID2 = 20  # ile neuronów w warstwie ukrytej
 OUT_SIZE = 9  # proponowane ruchy dla "cross" (trzeba sprawdzić czy są "valid")
 
-EPOCHS = 10000
+EPOCHS = 1200
+ROUNDS = 60
 LR = 0.001
-BATCH_SIZE = 500
+BATCH_SIZE = 10000
 
 VICTORY = 100
 DRAW = 50
 DEFEAT = 0
 
+# Wybór pozycji dla których będziemy poprawiali predykcje
+MIN_DONE = 2
+MAX_DONE = 4
+
 # Net creation
-net = TicTacToeNet(IN_SIZE, HID, OUT_SIZE)
+net = TicTacToeNet(IN_SIZE, HID, HID2, OUT_SIZE)
 # net = net.double()
-net.load('saves/one.dat')
+net.load('saves/two.dat')
 
 if device == 'cuda':
     net = net.cuda()  # cała sieć kopiowana na GPU
@@ -65,10 +74,17 @@ loss_function = nn.MSELoss(reduction='mean')
 optimizer = optim.SGD(net.parameters(), lr=LR, momentum=0.9)  # będzie na GPU, jeśli gpu=True
 
 
+def format_list(w: List) -> str:
+    s = '['
+    for x in w:
+        s += f'{x:5.2f}, '
+    return s[:-2] + ']'
+
+
 def better_prediction_after_move(net: TicTacToeNet, state: List[int], move_x, discount_lambda) -> Tuple[float, List]:
     """
     Funkcja podająca spodziewaną nagrodę "o 1 ruch dalej" ...
-    Funkcja ocenia wyniky wykonania ruchu "ax" (przez "x") w stanie "state"
+    Funkcja ocenia wynik wykonania ruchu `move_x` (przez 'x') w stanie "state"
 
     Zakładamy, że "o" wybierze taki ruch, by zminimalizować prognozowany przez `net` reward następnej
     pozycji "x"-a.
@@ -76,10 +92,12 @@ def better_prediction_after_move(net: TicTacToeNet, state: List[int], move_x, di
     """
     nstate_o = apply_move(state, move_x)
     if is_winning(nstate_o[9:]):
-        return -DEFEAT, state  # nawet przed ruchem pozycja była przegrana
+        return DEFEAT, state  # nawet przed ruchem pozycja była przegrana
     if is_winning(nstate_o[:9]):
-        # nasz ruch (x-em) doprowadził do zwycięstwa --> 100pkt
+        # nasz ruch (x-em) doprowadził do zwycięstwa --> VICTORY
         return VICTORY, state
+    if is_draw(nstate_o):
+        return DRAW, state
 
     worst_case_for_o = VICTORY
     best_final_state = None
@@ -93,23 +111,24 @@ def better_prediction_after_move(net: TicTacToeNet, state: List[int], move_x, di
     for ao in valid_o_moves:
         nnstate_x = apply_move(nstate_o, ao)
         if is_winning(nnstate_x[9:]):
-            return -DEFEAT, state  # kółko ma ruch wygrywający, czyli nagroda dla "x" za ruch "ax" w stanie "state" jest -100
+            # kółko ma ruch wygrywający, czyli nagroda dla "x" za ruch "ax" w stanie "state" jest DEFEAT
+            return -DEFEAT, state
         nnstate_x_t = tensor(nnstate_x, dtype=dtype, device=device)
 
         # predykcja wartości stanu "nnstate_x" przez akutalną sieć neuronową
         best_value_for_x = max(net(nnstate_x_t)[0].tolist())
 
         # 'o' szuka stanu w którym najlepszy ruch dla 'x' daje 'x'-owi jak najmniej
-        worst_case_for_o = min(worst_case_for_o, best_value_for_x)
+        # worst_case_for_o = min(worst_case_for_o, best_value_for_x)
         if best_value_for_x < worst_case_for_o:
             worst_case_for_o = best_value_for_x
             best_final_state = nnstate_x
     return discount_lambda * worst_case_for_o, best_final_state
 
 
-def get_updated_prediction(net, state: List[int], move, discount_lambda, verbose=False) -> Tuple[float, List]:
-    t_state = tensor(state, dtype=dtype, device=device)  # stan-tensor; na niego można aplikować `net`
-    prediction = net(t_state)[0].tolist()
+def get_updated_prediction(net, state: List[int], move, discount_lambda, verbose=False) -> Tuple[
+    List[float], List[int]]:
+    prediction = get_move_values(state)
 
     if verbose:
         print('stan:')
@@ -123,14 +142,46 @@ def get_updated_prediction(net, state: List[int], move, discount_lambda, verbose
     return prediction, state_after_optimal_play
 
 
-def set_prediction_of_invalid_moves(prediction: List[float], v_moves: List[List[int]], fixed_value=-30):
+def set_prediction_of_invalid_moves(prediction: List[float], v_moves: List[List[int]]):
     """
-    Zmieniamy "prediction" tak by było = fixed_value, dla ruchów których nie można wykonać.
+    Zmieniamy "prediction" tak by było = DEFEAT, dla ruchów których nie można wykonać.
     """
     for position in range(9):
         move = [1 if i == position else 0 for i in range(18)]
         if move not in v_moves:
-            prediction[position] = fixed_value
+            prediction[position] = DEFEAT
+
+
+def select_best_valid_move(state: List[int], values: List[float]) -> List[int]:
+    """
+    Często powtarzająca się czynność: mamy stan (w którym 'x' może wykonać pewne ruchy), i mamy
+    predykcje wartości tych ruchów (values). Cel - wybrać ruch o najwyższej wartości, ale tylko z
+    grupy ruchów dozwolonych.
+    :return:
+    """
+    v_moves = valid_moves(state, cross=True)
+    valid_move_positions = set([m.index(1) for m in v_moves])
+
+    if len(v_moves) == 0:
+        raise RuntimeError(f'No valid moves found for state: {state}; cannot select any.')
+
+    best_move = None
+    best_value = -100
+    for at in range(9):
+        if at not in valid_move_positions:
+            continue
+        if values[at] > best_value:
+            best_value = values[at]
+            best_move = [1 if i == at else 0 for i in range(18)]
+    return best_move
+
+
+def get_move_values(state: List[int]) -> List[float]:
+    """
+    :return: Wartości ruchów 'x'-a dla stanu 'state'
+    """
+    t_state = tensor(state, dtype=dtype, device=device)
+    return net(t_state).tolist()[0]  # wartości ruchów dla stanu `state`
 
 
 def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=False,
@@ -149,7 +200,7 @@ def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=Fals
     while len(samples) < sample_size:
         # wybór pozycji początkowej
         if current_board is None:
-            moves_done = randint(1, 2)
+            moves_done = randint(MIN_DONE, MAX_DONE)
             state = random_state(moves_done, moves_done)  # losujemy stan z moves_done 'x'-w i 'o'
         else:
             state = current_board
@@ -157,27 +208,15 @@ def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=Fals
 
         # wybór ruchu do wykonania/sprawdzenia lepszej predykcji
         v_moves = valid_moves(state, cross=True)
-        follow_best_move_chance = min(0.33, follow_best_move_chance)  # zawsze zostawmy szansę na losowe ruchy
-        if len(v_moves) > 0 and random() < follow_best_move_chance:
+        if len(v_moves) == 0:
+            continue  # brak dozwolonych ruchów
+        if random() < follow_best_move_chance:
             # wybieramy ruch który spodziewamy się jest najlepszym w pozycji `state`
-            t_state = tensor(state, dtype=dtype, device=device)
-            values = net(t_state).tolist()
-            move_values = []
-            for i in range(9):
-                move_values.append((values[0][i], i))
-            move_values.sort(reverse=True)  # posortowane od ruchów o największej wartości
-            move = None
-            for (value, position) in move_values:
-                # sprawdzenie który ruch o największej wartości jest dozwolony
-                move_try = [1 if i == position else 0 for i in range(18)]
-                if move_try in v_moves:
-                    move = move_try
-                    break
-            # wybrano ruch `move`
+            move = select_best_valid_move(state, get_move_values(state))
         else:
             move = choice(v_moves)  # losowy ruch
 
-        # optymalizacja #1: jeli aktualna pozycja jest wygrywajca/przegrywajca, to jej wartość ma być ustalona
+        # optymalizacja #1: jeśli aktualna pozycja jest wygrywajca/przegrywajca, to jej wartość ma być ustalona
         # → dla danego stanu update'ujemy nie tylko wynik dla pozycji `move`, ale też dla innych
         state_after_optimal_play = None
         if is_winning(state[:9]):
@@ -188,44 +227,27 @@ def generate_updated_predictions(net, DISCOUNT_LAMBDA, sample_size, verbose=Fals
             prediction = [DRAW] * 9  # obecna pozycja jest remisowa (plansza pełna)
         else:
             # krok faktycznego liczenia lepszej predykcji
-            prediction, state_after_optimal_play = get_updated_prediction(net, state, move, DISCOUNT_LAMBDA, verbose)
+            prediction, state_after_optimal_play = get_updated_prediction(net, state, move, DISCOUNT_LAMBDA,
+                                                                          verbose=len(samples) < 10 & verbose)
 
         # ustalenie następnego stanu do rozpatrzenia - możliwość kontynuacji gry
-        if state_after_optimal_play is not None and play_game is True:
-            if prediction != VICTORY and prediction != DEFEAT:
+        if play_game and state_after_optimal_play is not None:
+            if prediction != VICTORY and prediction != DEFEAT:  # fixme: prediction jest listą
                 current_board = state_after_optimal_play
             else:
                 current_board = None
         else:
             current_board = None
 
-        set_prediction_of_invalid_moves(prediction, v_moves, fixed_value=-5)
+        # optymalizacja #2: ustalamy predykcje wartości ruchów których nie można wykonać na DEFEAT
+        set_prediction_of_invalid_moves(prediction, v_moves)
 
         samples.append(state)
         outputs.append(prediction)
         if verbose:
             print('-.-' * 20)
-    print(f'continued in {continued_plays}/{sample_size}')
 
     return samples, outputs
-
-
-"""
-Uczenie przez "granie" w x-o; 
-... to musi być funkcja do "update prediction"...
-- musi zaczynać od "state = [0]*18", czyli pusta plansza
-- wykonujemy ruch x-a na podstawie net(state)... czyli aktualnych predykcji wartości ruchów...
-- ?? jaki ruch ma wykonać 'o'... zróbmy "optymalny"... czyli taki (z dozwolonych), by net(state') 
-  (po jego wykonaniu) była dla nas (x-ów) jak najgorsza...
-- oprócz zmiany predykcji, zmieniamy stan.. 
-"""
-
-
-def format_list(w: List) -> str:
-    s = '['
-    for x in w:
-        s += f'{x:5.2f}, '
-    return s[:-2] + ']'
 
 
 def convert_to_batches_tensors(samples: List[List[float]], outputs: List[List[float]], batch_size):
@@ -261,29 +283,33 @@ def train_net(net, samples, outputs, n_epochs):
             optimizer.step()
         if epoch % 25 == 0:
             print(f' epoch:{epoch}, loss:{total_loss:.6f}')
+            b_samples, b_outputs = convert_to_batches_tensors(samples, outputs, BATCH_SIZE)  # też "shuffle"
+
     pass
 
 
 def RL_teaching_loop():
-    # kod uzywamy sieci neuronowej "net"; na poczatku losowej...
-    for i in range(40):
+    # używamy sieci neuronowej "net"; na początku losowej...
+    for i in range(ROUNDS):
         print(f'---- ROUND {i}')
         # generujemy nowe dane do uczenia sieci -- dane ktore zawieraja "lepsze" oceny pozycji
-        ss, oo = generate_updated_predictions(net, DISCOUNT_LAMBDA=0.95, sample_size=2500,
+        ss, oo = generate_updated_predictions(net, DISCOUNT_LAMBDA=0.95, sample_size=50000,
                                               verbose=(i % 10 == 0),
-                                              follow_best_move_chance=i / 700, play_game=False)
+                                              follow_best_move_chance=0.30, play_game=False)
 
         # uczenie sieci neuronowej "lepszymi" predykcjami
-        train_net(net, samples=ss, outputs=oo, n_epochs=100)
+        train_net(net, samples=ss, outputs=oo, n_epochs=EPOCHS)
         print('-' * 10)
 
     # Optional result save
-    net.save('saves/one.dat')
+    net.save('saves/two.dat')
     print('net saved')
 
 
 def interactive_play():
     state = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ]
+    at = randint(0, 8)
+    state = [1 if i == at else 0 for i in range(18)]
     while True:
         print_state(state)
         o_move_at = int(input('> ')) + 9
@@ -309,11 +335,9 @@ def interactive_play():
             if move_try in v_moves:
                 move = move_try
                 break
-        print('wybrałem ruch:', move)
         no_state = apply_move(nxstate, move)
         state = no_state
         print('-------')
-
 
 
 if __name__ == '__main__':

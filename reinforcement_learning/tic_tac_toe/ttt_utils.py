@@ -139,7 +139,12 @@ Cache: mapa (lub dict) odwzorowująca argument funkcji (tu: stan) w wartości zw
 """
 
 if __name__ == '__main__':
-    # print(is_winning([1, 1, 1, 0, 0, 0, 0, 0, 0]), True)
+    """
+x x o
+o x .
+x o o
+"""
+    print(is_winning([1, 1, 0, 0, 1, 0, 1, 0, 0]), True)
     # print(is_winning([1, 1, 0, 0, 0, 0, 0, 0, 0]), False)
     # print(is_winning([1, 1, 0, 1, 0, 0, 1, 0, 0]), True)
     # print(is_winning([1, 0, 0, 0, 1, 0, 1, 0, 1]), True)
@@ -147,13 +152,13 @@ if __name__ == '__main__':
     # print_state(s)
     # move = [0,0,0,0,0,0,0,0,0, 0,0,0,1,0,0,0,0,0]
 
-    s = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
-    print_state(s)
-    vm = valid_moves(s, cross=True)
-    print(vm)
-    for m in vm:
-        print('---')
-        print_state(m)
+    # s = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+    # print_state(s)
+    # vm = valid_moves(s, cross=True)
+    # print(vm)
+    # for m in vm:
+    #     print('---')
+    #     print_state(m)
     # print(is_winning(s[9:]))
 
     # nstate = apply_move(s, move)
