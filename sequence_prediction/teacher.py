@@ -4,7 +4,9 @@ from traceback import print_list
 import torch
 from torch import nn, optim
 import torch.nn.functional as funct
-from sequence_prediction.sample_generator import gen_samples, DX
+
+from sequence_prediction.funkcje import model_sinus, model_lorentz
+from sequence_prediction.sample_generator import gen_samples
 from supervised.helper import *
 
 
@@ -37,22 +39,22 @@ class SequenceNet(nn.Module):
         torch.save(self.state_dict(), filename)
 
 
-dtype = torch.float
+dtype = torch.double
 device = 'cpu'  # gdzie wykonywać obliczenia
 # device = 'cuda'
-HISTORY_N = 5  # ile liczb wchodzi (długość listy)
-HID = 2  # ile neuronów w warstwie ukrytej
+HISTORY_N = 10  # ile liczb wchodzi (długość listy)
+HID = 3  # ile neuronów w warstwie ukrytej
 
 # liczba próbek treningowych zwracających "1"
-N_SAMPLE = 1000  # liczba próbej treningowych zwracających "0"
-BATCH_SIZE = 150  # liczba próbek losowych
+N_SAMPLE = 3000  # liczba próbej treningowych zwracających "0"
+BATCH_SIZE = 500  # liczba próbek losowych
 
-EPOCHS = 1000
-LR = 0.0001
+EPOCHS = 4000
+LR = 0.3
 
 # Net creation
 net = SequenceNet(HISTORY_N, HID)
-net = net.float()
+net = net.double()
 net.load('saves/one.dat')
 
 # Czy obliczenia mają być na GPU
@@ -60,7 +62,9 @@ if device == 'cuda':
     net = net.cuda()  # cała sieć kopiowana na GPU
 
 # Dane do uczenia sieci
-sample, output = gen_samples(n_samples=N_SAMPLE, input_length=HISTORY_N)
+DX = 0.3
+# sample, output = gen_samples(n_samples=N_SAMPLE, history_len=HISTORY_N,model_function=model_sinus, x_from=0, x_to=6.28, dx=DX)
+sample, output = gen_samples(n_samples=N_SAMPLE, history_len=HISTORY_N,model_function=model_lorentz, x_from=0, x_to=10, dx=DX)
 
 # zamiana próbek na tensory (możliwa kopia do pamięci GPU)
 t_sample = tensor(sample, dtype=dtype, device=device)
@@ -75,6 +79,8 @@ t_output = t_output[per_torch]
 # "krojenie" próbek na "batches" (grupy próbek, krok optymalizacji po przeliczeniu całej grupy)
 b_sample = torch.split(t_sample, BATCH_SIZE)
 b_output = torch.split(t_output, BATCH_SIZE)
+
+
 # print(b_sample)
 # print(b_output)
 
@@ -94,7 +100,7 @@ def train():
             prediction = prediction.view(-1)  # size: [5,1] -> [5] (flat, same as b_out)
             loss = loss_function(prediction, batch_o)
 
-            if EPOCHS - epoch < 10:
+            if EPOCHS - epoch < 2:
                 # pokazujemy wyniki dla 30 ostatnich przypadków, by sprawdzić co sieć przewiduje tak naprawdę
                 print('---------')
                 print(f'input: {batch_s.tolist()}')
@@ -113,13 +119,13 @@ def train():
 
 
 def predict():
-    history = [1 + sin(i * DX) for i in range(HISTORY_N)]
+    history = [model_lorentz(2 + i * DX) for i in range(HISTORY_N)]  # początkowa historia
     full = history.copy()
-    for i in range(500):
+    for i in range(100):
         history_t = tensor([history], dtype=dtype, device=device)
         history_batch = torch.split(history_t, BATCH_SIZE)
         # print(history_batch)
-        nxt = net(history_batch[0])
+        nxt = net(history_batch[0])  # szukamy predykcji następnej wartości
         val = float(nxt[0][0])
         print(f'{history} → {val}')
         full.append(val)
