@@ -4,3 +4,7 @@ torchvision
 numpy
 Pillow
 cachetools
+
+# do części z tym pakietem (w "other")
+sklearn
+matplotlib

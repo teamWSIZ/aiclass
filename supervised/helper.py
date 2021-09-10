@@ -87,3 +87,11 @@ def format_list(l: List[float]) -> str:
         res += f' {x:5.3f}'
     res += ']'
     return res
+
+def format_list_int(l: List[int]) -> str:
+    return format_list([float(x) for x in l])
+    # res = '['
+    # for x in l:
+    #     res += f' {x}'
+    # res += ']'
+    # return res
